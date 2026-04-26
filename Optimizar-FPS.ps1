@@ -28,6 +28,7 @@ $colores = @{
     error    = "Red"
     info     = "Blue"
     advertencia = "DarkYellow"
+    web      = "Yellow"
 }
 
 # Funciones de estilo
@@ -49,16 +50,21 @@ function Write-Centered {
 function Mostrar-Banner {
     Clear-Host
     Write-Border
-    Write-Centered "█████╗ ███████╗████████╗███████╗██╗  ██╗██╗███████╗" $colores.titulo
-    Write-Centered "██╔══██╗╚══███╔╝╚══██╔══╝██╔════╝██║ ██╔╝██║██╔════╝" $colores.titulo
-    Write-Centered "███████║  ███╔╝    ██║   █████╗  █████╔╝ ██║█████╗" $colores.titulo
-    Write-Centered "██╔══██║ ███╔╝     ██║   ██╔══╝  ██╔═██╗ ██║██╔══╝" $colores.titulo
-    Write-Centered "██║  ██║███████╗   ██║   ███████╗██║  ██╗██║███████╗" $colores.titulo
-    Write-Centered "╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚══════╝" $colores.titulo
+    Write-Centered "    █████╗ ███████╗████████╗███████╗ ██████╗██╗  ██╗" $colores.titulo
+    Write-Centered "   ██╔══██╗╚══███╔╝╚══██╔══╝██╔════╝██╔════╝██║  ██║" $colores.titulo
+    Write-Centered "   ███████║  ███╔╝    ██║   █████╗  ██║     ███████║" $colores.titulo
+    Write-Centered "   ██╔══██║ ███╔╝     ██║   ██╔══╝  ██║     ██╔══██║" $colores.titulo
+    Write-Centered "   ██║  ██║███████╗   ██║   ███████╗╚██████╗██║  ██║" $colores.titulo
+    Write-Centered "   ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝" $colores.titulo
     Write-Separator
-    Write-Centered "🎮 GAMING OPTIMIZER + ULTIMATE UTILITIES 🛠️" $colores.opcion
-    Write-Centered "         by AZTEKILLERTECH" $colores.info
+    Write-Centered "         GAMING OPTIMIZER + ULTIMATE UTILITIES" $colores.opcion
+    Write-Centered "                 by AZTEKILLERTECH" $colores.info
     Write-Bottom
+    Write-Host ""
+    # Mostrar la web destacada
+    Write-Host "  🌐 Visita mi sitio web: " -NoNewline -ForegroundColor $colores.web
+    Write-Host "www.aztekillertech.net" -ForegroundColor $colores.web -BackgroundColor DarkBlue
+    Write-Host "  (En tu navegador, abre esta dirección para más guías y herramientas)" -ForegroundColor $colores.advertencia
     Write-Host ""
 }
 
@@ -333,7 +339,7 @@ do {
         "4" { Instalar-Navegadores }
         "5" { Instalar-Documentos }
         "6" { Instalar-Utilidades }
-        "0" { Write-Host "  Hasta luego, visita aztekillertech.net" -ForegroundColor Magenta; break }
+        "0" { Write-Host "  Hasta luego, visita www.aztekillertech.net" -ForegroundColor Magenta; break }
         default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 } while ($menu -ne "0")
