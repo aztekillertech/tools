@@ -14,11 +14,11 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     pause; exit
 }
 
-# Colores personalizados
-$colorTitulo = "#AA00FF"   # Morado fuerte
-$colorPregunta = "#D580FF" # Morado claro
-$colorAceptado = "#00FFAA" # Verde menta
-$colorRechazado = "#FF5555" # Rojo suave
+# Colores personalizados (ahora válidos para ConsoleColor)
+$colorTitulo = "Magenta"
+$colorPregunta = "DarkMagenta"
+$colorAceptado = "Green"
+$colorRechazado = "Red"
 
 # Función para dibujar banner
 function Mostrar-Banner {
@@ -45,6 +45,21 @@ function Abrir-URL($url) {
     Write-Host "  🌐 Abriendo enlace: $url" -ForegroundColor Cyan
 }
 
+# Función para detectar GPU real (ignorando drivers virtuales como AnyViewer)
+function Detectar-GPU-Real {
+    $gpuReal = Get-WmiObject Win32_VideoController | Where-Object {
+        $_.Name -notlike "*Microsoft*" -and 
+        $_.Name -notlike "*Remote*" -and 
+        $_.Name -notlike "*AnyViewer*" -and 
+        $_.Name -notlike "*Virtual*"
+    } | Select-Object -First 1
+    if ($gpuReal) {
+        return $gpuReal.Name
+    } else {
+        return "No detectada (genérica)"
+    }
+}
+
 # Menú de instalación de programas y drivers
 function Instalar-Programas {
     Mostrar-Banner
@@ -52,12 +67,12 @@ function Instalar-Programas {
     Write-Host "  Selecciona qué quieres descargar/instalar:" -ForegroundColor White
     Write-Host ""
     
-    # Detectar GPU
-    $gpu = (Get-WmiObject Win32_VideoController | Where-Object {$_.Name -notlike "*Microsoft*"} | Select-Object -First 1).Name
-    Write-Host "  🖥️  GPU detectada: $gpu" -ForegroundColor Cyan
+    # Detectar GPU real
+    $gpuReal = Detectar-GPU-Real
+    Write-Host "  🖥️  GPU principal detectada: $gpuReal" -ForegroundColor Cyan
     Write-Host ""
     
-    # Lista de programas (nombre, URL, recomendado para)
+    # Lista de programas (nombre, URL, tipo)
     $programas = @(
         @{Nombre="🎮 NVIDIA GeForce Experience / Driver"; URL="https://www.nvidia.com/download/index.aspx"; Tipo="Driver NVIDIA"},
         @{Nombre="🟥 AMD Adrenalin Edition"; URL="https://www.amd.com/es/support"; Tipo="Driver AMD"},
@@ -69,7 +84,7 @@ function Instalar-Programas {
         @{Nombre="📈 GPU-Z (Información gráfica)"; URL="https://www.techpowerup.com/gpuz/"; Tipo="Utilidad"},
         @{Nombre="🌡️ HWMonitor (Temperaturas)"; URL="https://www.cpuid.com/softwares/hwmonitor.html"; Tipo="Utilidad"},
         @{Nombre="⚙️ O&O ShutUp10 (Privacidad/rendimiento)"; URL="https://www.oo-software.com/en/shutup10"; Tipo="Optimización"},
-        @{Nombre="📦 Visual C++ Redistributables (Todo en uno)"; URL="https://github.com/abbodi1406/vcredist/releases"; Tipo="Requerido para juegos"}
+        @{Nombre="📦 Visual C++ Redistributables (Todo en uno)"; URL="https://github.com/abbodi1406/vcredist/releases"; Tipo="Requerido"}
     )
     
     $i = 1
@@ -89,7 +104,7 @@ function Instalar-Programas {
         Abrir-URL $elegido.URL
         Write-Host "  Presiona cualquier tecla para volver..." -ForegroundColor Gray
         pause
-        Instalar-Programas  # Volver al menú después de abrir
+        Instalar-Programas
     } else {
         Write-Host "  Opción no válida" -ForegroundColor Red
         Start-Sleep -Seconds 1
@@ -97,7 +112,7 @@ function Instalar-Programas {
     }
 }
 
-# Función de optimización (la misma que ya tenías, pero mejorada)
+# Función de optimización (con colores corregidos)
 function Optimizar-Sistema {
     Mostrar-Banner
     Write-Host "  🚀 INICIANDO OPTIMIZACIÓN DE FPS" -ForegroundColor Yellow
@@ -196,7 +211,7 @@ do {
     switch ($menu) {
         "1" { Optimizar-Sistema }
         "2" { Instalar-Programas }
-        "0" { Write-Host "  Hasta luego, visita aztekillertech.net"; break }
-        default { Write-Host "  Opción inválida"; Start-Sleep -Seconds 1 }
+        "0" { Write-Host "  Hasta luego, visita aztekillertech.net" -ForegroundColor Magenta; break }
+        default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 } while ($menu -ne "0")
