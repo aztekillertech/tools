@@ -1,7 +1,9 @@
 #!/bin/bash
 
 DESKTOP="$HOME/Desktop"
-LOG="$DESKTOP/Reporte_AztekIllerTech.txt"
+LOG="$DESKTOP/Reporte_AztekIllerTech_Mac.txt"
+OS_VERSION=$(sw_vers -productVersion | cut -d. -f1)
+ARCH=$(uname -m)
 
 separador() {
     echo "  <<<<  AZTEKILLERTECH  >>>>"
@@ -35,75 +37,91 @@ banner() {
 
 preguntar() {
     echo ""
-    echo "  $1"
-    opciones=("YES" "NO")
-    seleccion=0
-    while true; do
-        for i in 0 1; do
-            if [ $i -eq $seleccion ]; then
-                echo "  >> ${opciones[$i]} <<"
-            else
-                echo "     ${opciones[$i]}"
-            fi
-        done
-        read -rsn1 key
-        case "$key" in
-            A) seleccion=0 ;;
-            B) seleccion=1 ;;
-            "") 
-                if [ $seleccion -eq 0 ]; then return 0
-                else return 1
-                fi ;;
-        esac
-        echo -e "\033[3A"
-    done
+    echo "  $1 (s/n)"
+    read -r respuesta
+    case "$respuesta" in
+        [ssSyY]*) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 clear
-echo "REPORTE AZTEKILLERTECH - $(date)" > "$LOG"
+echo "REPORTE AZTEKILLERTECH MAC - $(date)" > "$LOG"
+log "macOS: $(sw_vers -productName) $OS_VERSION | Arquitectura: $ARCH"
 
 banner
 echo "  AUDITORIA Y OPTIMIZACION PRO - MAC"
-echo "  Usa flechas ARRIBA/ABAJO y ENTER para elegir"
+echo "  Responde s (si) o n (no) en cada opcion"
 separador
 
 # 1. AUDITORIA DE SEGURIDAD
 if preguntar "Ejecutar auditoria de seguridad completa?"; then
 
+    titulo "INFORMACION DEL SISTEMA"
+    log "Modelo:      $(system_profiler SPHardwareDataType 2>/dev/null | grep 'Model Name' | awk -F': ' '{print $2}')"
+    log "Chip:        $(system_profiler SPHardwareDataType 2>/dev/null | grep -E 'Chip|Processor Name' | head -1 | awk -F': ' '{print $2}')"
+    log "RAM:         $(system_profiler SPHardwareDataType 2>/dev/null | grep 'Memory:' | awk -F': ' '{print $2}')"
+    log "macOS:       $(sw_vers -productName) $(sw_vers -productVersion)"
+    log "Equipo:      $(hostname)"
+    log "Arquitectura: $ARCH"
+    log "Uptime:      $(uptime | sed 's/.*up //' | sed 's/,.*//')"
+
     titulo "PUERTOS ABIERTOS"
     puertos_riesgo=(21 22 23 25 53 80 110 135 139 443 445 1433 3306 3389 4444 5900 6379 8080 27017)
-    while IFS= read -r linea; do
-        puerto=$(echo "$linea" | grep -oE '\.\d+$' | tr -d '.')
-        for pr in "${puertos_riesgo[@]}"; do
-            if [ "$puerto" = "$pr" ]; then
-                log "  $linea  <-- REVISAR"
-                continue 2
-            fi
+    if [ "$OS_VERSION" -ge 12 ] 2>/dev/null; then
+        netstat -anp tcp 2>/dev/null | grep LISTEN | while IFS= read -r linea; do
+            puerto=$(echo "$linea" | awk '{print $4}' | grep -oE '[0-9]+$')
+            alerta=""
+            for pr in "${puertos_riesgo[@]}"; do
+                if [ "$puerto" = "$pr" ]; then alerta="  <-- REVISAR"; fi
+            done
+            log "  Puerto $puerto$alerta"
         done
-        log "  $linea"
-    done < <(netstat -an | grep LISTEN)
+    else
+        netstat -an 2>/dev/null | grep LISTEN | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    fi
 
     titulo "CONEXIONES ACTIVAS A INTERNET"
-    netstat -an | grep ESTABLISHED | while IFS= read -r linea; do
+    netstat -anp tcp 2>/dev/null | grep ESTABLISHED | while IFS= read -r linea; do
         log "  $linea"
     done
 
     titulo "FIREWALL"
-    estado=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null)
-    log "$estado"
+    if [ "$OS_VERSION" -ge 15 ] 2>/dev/null; then
+        estado=$(sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null)
+    else
+        estado=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null)
+    fi
+    if echo "$estado" | grep -q "enabled"; then
+        log "Firewall: ACTIVO"
+    else
+        log "Firewall: DESACTIVADO <-- RIESGO"
+    fi
 
     titulo "USUARIOS DEL SISTEMA"
-    dscl . list /Users | grep -v '^_' | while read -r usuario; do
-        log "  $usuario"
-    done
-
-    titulo "ACTUALIZACIONES PENDIENTES"
-    softwareupdate -l 2>&1 | grep -E "\*|No new" | while IFS= read -r linea; do
-        log "  $linea"
+    dscl . list /Users 2>/dev/null | grep -v '^_' | while read -r usuario; do
+        ultimo=$(last "$usuario" 2>/dev/null | head -1 | awk '{print $4,$5,$6,$7}')
+        if [ -z "$ultimo" ]; then ultimo="Nunca"; fi
+        log "  $usuario | Ultimo login: $ultimo"
     done
 
     titulo "APPS EN ARRANQUE AUTOMATICO"
-    ls ~/Library/LaunchAgents/ 2>/dev/null | while IFS= read -r linea; do
+    encontrados=0
+    for dir in "$HOME/Library/LaunchAgents" "/Library/LaunchAgents" "/Library/LaunchDaemons"; do
+        if [ -d "$dir" ]; then
+            while IFS= read -r archivo; do
+                log "  $archivo"
+                encontrados=$((encontrados + 1))
+            done < <(ls "$dir" 2>/dev/null)
+        fi
+    done
+    if [ "$encontrados" -eq 0 ]; then log "Sin apps en arranque automatico."; fi
+
+    titulo "ACTUALIZACIONES PENDIENTES"
+    log "Buscando actualizaciones..."
+    softwareupdate -l 2>&1 | grep -E "\*|recommended|No new" | while IFS= read -r linea; do
         log "  $linea"
     done
 fi
@@ -111,8 +129,7 @@ fi
 # 2. LIMPIAR TEMPORALES
 if preguntar "Limpiar archivos temporales?"; then
     titulo "LIMPIEZA DE TEMPORALES"
-    rutas=("$TMPDIR" "$HOME/Library/Caches" "/Library/Caches")
-    total=0
+    rutas=("$TMPDIR" "$HOME/Library/Caches")
     for ruta in "${rutas[@]}"; do
         if [ -d "$ruta" ]; then
             tam=$(du -sh "$ruta" 2>/dev/null | cut -f1)
@@ -126,7 +143,7 @@ fi
 # 3. ESPACIO EN DISCO
 if preguntar "Ver espacio en disco?"; then
     titulo "ESPACIO EN DISCO"
-    df -h | grep -E "^/dev" | while IFS= read -r linea; do
+    df -h 2>/dev/null | grep -E "^/dev|^map" | while IFS= read -r linea; do
         log "  $linea"
     done
 fi
@@ -134,38 +151,55 @@ fi
 # 4. CAMARA Y MICROFONO
 if preguntar "Ver apps con acceso a camara y microfono?"; then
     titulo "ACCESO A CAMARA Y MICROFONO"
-    log "  Abriendo preferencias de privacidad..."
-    log "  Ve a: Sistema > Privacidad y seguridad > Camara / Microfono"
-    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
+    if [ "$OS_VERSION" -ge 14 ] 2>/dev/null; then
+        log "  En macOS $OS_VERSION ve a:"
+        log "  Apple > Configuracion del Sistema > Privacidad y Seguridad > Camara"
+        log "  Apple > Configuracion del Sistema > Privacidad y Seguridad > Microfono"
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera" 2>/dev/null
+    else
+        log "  Apple > Preferencias del Sistema > Seguridad y Privacidad > Privacidad > Camara"
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera" 2>/dev/null
+    fi
 fi
 
 # 5. TOP PROCESOS
 if preguntar "Ver top procesos por CPU y RAM?"; then
     titulo "TOP 10 PROCESOS POR CPU"
-    ps aux --sort=-%cpu 2>/dev/null | head -11 | tail -10 | while IFS= read -r linea; do
-        log "  $linea"
-    done
+    if [ "$ARCH" = "arm64" ]; then
+        ps -eo pid,comm,%cpu,%mem --sort=-%cpu 2>/dev/null | head -11 | tail -10 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    else
+        ps aux 2>/dev/null | sort -rk3 | head -10 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    fi
+
     titulo "TOP 10 PROCESOS POR RAM"
-    ps aux --sort=-%mem 2>/dev/null | head -11 | tail -10 | while IFS= read -r linea; do
-        log "  $linea"
-    done
+    if [ "$ARCH" = "arm64" ]; then
+        ps -eo pid,comm,%cpu,%mem --sort=-%mem 2>/dev/null | head -11 | tail -10 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    else
+        ps aux 2>/dev/null | sort -rk4 | head -10 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    fi
 fi
 
 # 6. ERRORES DEL SISTEMA
 if preguntar "Ver errores recientes del sistema?"; then
     titulo "ERRORES RECIENTES (ultimas 24 horas)"
-    log "$(log show --predicate 'eventMessage contains "error"' --last 24h 2>/dev/null | head -20)"
-fi
-
-# 7. INFORMACION DEL SISTEMA
-if preguntar "Ver informacion general del sistema?"; then
-    titulo "INFORMACION DEL SISTEMA"
-    log "Modelo: $(system_profiler SPHardwareDataType | grep 'Model Name' | awk -F': ' '{print $2}')"
-    log "Procesador: $(system_profiler SPHardwareDataType | grep 'Chip\|Processor Name' | awk -F': ' '{print $2}' | head -1)"
-    log "RAM: $(system_profiler SPHardwareDataType | grep 'Memory' | awk -F': ' '{print $2}')"
-    log "macOS: $(sw_vers -productName) $(sw_vers -productVersion)"
-    log "Nombre del equipo: $(hostname)"
-    log "Uptime: $(uptime | awk '{print $3,$4}' | tr -d ',')"
+    if [ "$OS_VERSION" -ge 12 ] 2>/dev/null; then
+        log show --predicate 'eventMessage contains "error"' --last 24h 2>/dev/null | grep -v "^Filtering" | head -15 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    else
+        log "  Sistema antiguo - revisa /var/log/system.log manualmente"
+        tail -50 /var/log/system.log 2>/dev/null | grep -i error | head -10 | while IFS= read -r linea; do
+            log "  $linea"
+        done
+    fi
 fi
 
 echo ""
