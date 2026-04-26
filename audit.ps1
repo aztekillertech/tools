@@ -23,8 +23,9 @@ Titulo "PUERTOS ABIERTOS"
 Get-NetTCPConnection -State Listen | Sort-Object LocalPort | ForEach-Object {
     $proc   = (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Name
     $alerta = if ($puertosRiesgo -contains $_.LocalPort) { " <-- REVISAR" } else { "" }
+    $color  = if ($alerta) { "Yellow" } else { "Gray" }
     $msg    = "Puerto $($_.LocalPort) | $proc$alerta"
-    Log $msg (if ($alerta) { "Yellow" } else { "Gray" })
+    Log $msg $color
 }
 
 Titulo "CONEXIONES A INTERNET"
@@ -35,21 +36,24 @@ if ($conex) {
     $conex | ForEach-Object {
         $proc   = (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Name
         $alerta = if ($procesosAlerta -contains $proc) { " <-- ALERTA CRITICA" } else { "" }
+        $color  = if ($alerta) { "Red" } else { "White" }
         $msg    = "$proc | $($_.LocalPort) -> $($_.RemoteAddress):$($_.RemotePort)$alerta"
-        Log $msg (if ($alerta) { "Red" } else { "White" })
+        Log $msg $color
     }
 } else { Log "Sin conexiones activas." "Gray" }
 
 Titulo "FIREWALL"
 Get-NetFirewallProfile | ForEach-Object {
-    $msg = "Perfil: $($_.Name) | $(if ($_.Enabled) { 'ACTIVO' } else { 'DESACTIVADO <-- RIESGO' })"
-    Log $msg (if ($_.Enabled) { "Green" } else { "Red" })
+    $color = if ($_.Enabled) { "Green" } else { "Red" }
+    $msg   = "Perfil: $($_.Name) | $(if ($_.Enabled) { 'ACTIVO' } else { 'DESACTIVADO <-- RIESGO' })"
+    Log $msg $color
 }
 
 Titulo "USUARIOS LOCALES"
 Get-LocalUser | ForEach-Object {
-    $msg = "$($_.Name) | $(if ($_.Enabled) { 'ACTIVO' } else { 'deshabilitado' }) | Ultimo login: $(if ($_.LastLogon) { $_.LastLogon } else { 'Nunca' })"
-    Log $msg (if ($_.Enabled) { "White" } else { "DarkGray" })
+    $color = if ($_.Enabled) { "White" } else { "DarkGray" }
+    $msg   = "$($_.Name) | $(if ($_.Enabled) { 'ACTIVO' } else { 'deshabilitado' }) | Ultimo login: $(if ($_.LastLogon) { $_.LastLogon } else { 'Nunca' })"
+    Log $msg $color
 }
 
 Titulo "STARTUP"
