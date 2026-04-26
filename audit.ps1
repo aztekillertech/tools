@@ -1,27 +1,30 @@
-$LOG = "$HOME\Desktop\Reporte_AztekIllerTech.txt"
-$linea = "=" * 60
+$DESKTOP = [Environment]::GetFolderPath("Desktop")
+$LOG = "$DESKTOP\Reporte_AztekIllerTech.txt"
+
+function Separador($c) {
+    Write-Host "  <<<<  AZTEKILLERTECH  >>>>" -ForegroundColor $c
+}
 
 function Titulo($t, $c) {
-    Write-Host "`n$linea" -ForegroundColor $c
+    Write-Host ""
+    Separador $c
     Write-Host "  $t" -ForegroundColor $c
-    Write-Host "$linea" -ForegroundColor $c
-    Add-Content $LOG "`n$linea`n  $t`n$linea"
+    Separador $c
+    Add-Content $LOG "`n<<<< AZTEKILLERTECH >>>>`n  $t`n<<<< AZTEKILLERTECH >>>>" -ErrorAction SilentlyContinue
 }
 
 function Log($m, $c) {
     Write-Host $m -ForegroundColor $c
-    Add-Content $LOG $m
+    Add-Content $LOG $m -ErrorAction SilentlyContinue
 }
 
 function Banner($color) {
     Write-Host ""
-    Write-Host "    _       ____  ____  ____  _  __ ___  __    __    ____  ____  ____  ____  ____  _  _ " -ForegroundColor $color
-    Write-Host "   /_\     (__  )(_  _)(  __)( )/ // __)(  )  (  )  (  __)(  _ \(_  _)(  __)/ ___)/ )( \" -ForegroundColor $color
-    Write-Host "  //_\\     / _/   )(   ) _)  )  (( (__  )(__ )(     ) _)  )   /  )(   ) _)( (__ ) __ (" -ForegroundColor $color
-    Write-Host " /     \  (____)  (__) (____)(__)(_)\___)(____)(____)(____)(__)__)(__) (____)\___)\)(_)/" -ForegroundColor $color
-    Write-Host ""
-    Write-Host "                    Tu aliado de confianza en tecnologia" -ForegroundColor DarkGray
-    Write-Host "                         aztekillertech.net" -ForegroundColor DarkGray
+    Separador $color
+    Write-Host "        AZTEKILLERTECH" -ForegroundColor $color
+    Write-Host "        Tu aliado de confianza en tecnologia" -ForegroundColor DarkGray
+    Write-Host "        aztekillertech.net" -ForegroundColor DarkGray
+    Separador $color
     Write-Host ""
 }
 
@@ -45,14 +48,12 @@ function Preguntar($pregunta) {
 }
 
 Clear-Host
-"REPORTE AZTEKILLERTECH - $(Get-Date)" | Out-File $LOG -Encoding UTF8
+"REPORTE AZTEKILLERTECH - $(Get-Date)" | Out-File $LOG -Encoding UTF8 -ErrorAction SilentlyContinue
 
 Banner "Magenta"
-
-Write-Host $linea -ForegroundColor Magenta
 Write-Host "  AUDITORIA Y OPTIMIZACION PRO" -ForegroundColor Magenta
 Write-Host "  Usa flechas ARRIBA/ABAJO y ENTER para elegir" -ForegroundColor DarkGray
-Write-Host $linea -ForegroundColor Magenta
+Separador "Magenta"
 
 if (Preguntar "Ejecutar auditoria de seguridad completa?") {
     $pr = @(21,22,23,25,53,80,110,135,139,443,445,1433,3306,3389,4444,5900,6379,8080,27017)
@@ -122,8 +123,7 @@ if (Preguntar "Limpiar archivos temporales del sistema?") {
     $totalBytes = 0
     foreach ($ruta in $rutas) {
         if (Test-Path $ruta) {
-            $archivos = Get-ChildItem $ruta -Recurse -ErrorAction SilentlyContinue
-            $bytes = ($archivos | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+            $bytes = (Get-ChildItem $ruta -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
             if (-not $bytes) { $bytes = 0 }
             $totalBytes += $bytes
             Remove-Item "$ruta\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -142,12 +142,11 @@ if (Preguntar "Vaciar cache DNS?") {
 if (Preguntar "Ver programas innecesarios en el inicio de Windows?") {
     Titulo "PROGRAMAS EN STARTUP" "Cyan"
     $innecesarios = @("Spotify","Discord","Steam","OneDrive","Skype","Teams","Zoom","EpicGamesLauncher","Canva","Medal")
-    $startupItems = Get-CimInstance Win32_StartupCommand
     $encontrados = 0
-    foreach ($item in $startupItems) {
+    Get-CimInstance Win32_StartupCommand | ForEach-Object {
         foreach ($prog in $innecesarios) {
-            if ($item.Name -like "*$prog*" -or $item.Command -like "*$prog*") {
-                Log "Detectado en startup: $($item.Name)" "Yellow"
+            if ($_.Name -like "*$prog*" -or $_.Command -like "*$prog*") {
+                Log "Detectado en startup: $($_.Name)" "Yellow"
                 $encontrados++
             }
         }
@@ -179,7 +178,7 @@ if (Preguntar "Ver apps con acceso a camara y microfono?") {
     foreach ($path in $regPaths) {
         $tipo = if ($path -like "*webcam*") { "CAMARA" } else { "MICROFONO" }
         Write-Host "`n  $tipo" -ForegroundColor Yellow
-        Add-Content $LOG "`n  $tipo"
+        Add-Content $LOG "`n  $tipo" -ErrorAction SilentlyContinue
         if (Test-Path $path) {
             Get-ChildItem $path -ErrorAction SilentlyContinue | ForEach-Object {
                 $val = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).Value
@@ -236,10 +235,9 @@ if (Preguntar "Ver errores recientes del sistema?") {
 }
 
 Write-Host ""
-Write-Host $linea -ForegroundColor Magenta
 Banner "Magenta"
 Write-Host "  Gracias por usar AztekIllerTech" -ForegroundColor Magenta
 Write-Host "  Reporte guardado en: $LOG" -ForegroundColor Yellow
 Write-Host "  aztekillertech.net" -ForegroundColor DarkGray
-Write-Host $linea -ForegroundColor Magenta
+Separador "Magenta"
 Write-Host ""
