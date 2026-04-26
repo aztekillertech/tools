@@ -1,319 +1,330 @@
 <#
 .SYNOPSIS
-    Script definitivo de optimización gaming + instalador automático de drivers y programas.
+    Script definitivo de optimización gaming + instalador automático de drivers, programas y utilidades.
     Estilo AZTEKILLERTECH para Windows 10/11.
 .NOTES
     Autor: AZTEKILLERTECH
     Web: https://aztekillertech.net
-    Requiere: PowerShell como Administrador (para drivers y algunas instalaciones).
+    Requiere: PowerShell como Administrador.
 #>
 
-# Comprobar administrador
+# ==============================================
+# VERIFICAR ADMINISTRADOR
+# ==============================================
 if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Host "❌ EJECUTA COMO ADMINISTRADOR (clic derecho > PowerShell como Admin)" -ForegroundColor Red
     pause; exit
 }
 
-# Colores
-$colorTitulo = "Magenta"
-$colorPregunta = "DarkMagenta"
-$colorAceptado = "Green"
-$colorRechazado = "Red"
+# ==============================================
+# CONFIGURACIÓN DE COLORES Y ESTILOS
+# ==============================================
+$colores = @{
+    titulo   = "Magenta"
+    borde    = "DarkMagenta"
+    opcion   = "Cyan"
+    pregunta = "Yellow"
+    exito    = "Green"
+    error    = "Red"
+    info     = "Blue"
+    advertencia = "DarkYellow"
+}
 
-# Función banner
+# Funciones de estilo
+function Write-Border {
+    Write-Host ("╔" + "═" * 78 + "╗") -ForegroundColor $colores.borde
+}
+function Write-Separator {
+    Write-Host ("╠" + "═" * 78 + "╣") -ForegroundColor $colores.borde
+}
+function Write-Bottom {
+    Write-Host ("╚" + "═" * 78 + "╝") -ForegroundColor $colores.borde
+}
+function Write-Centered {
+    param([string]$texto, [string]$color = $colores.titulo)
+    $espacios = [math]::Floor((78 - $texto.Length) / 2)
+    Write-Host ("║" + " " * $espacios + $texto + " " * (78 - $espacios - $texto.Length) + "║") -ForegroundColor $color
+}
+
 function Mostrar-Banner {
     Clear-Host
-    Write-Host "====================================================" -ForegroundColor Magenta
-    Write-Host "    🎮  AZTEKILLERTECH GAMING OPTIMIZER  🎮        " -ForegroundColor Magenta
-    Write-Host "====================================================" -ForegroundColor Magenta
-    Write-Host "   Optimización + Instalación automática             " -ForegroundColor Cyan
-    Write-Host "   Elige una opción del menú                        " -ForegroundColor Cyan
-    Write-Host "====================================================" -ForegroundColor Magenta
+    Write-Border
+    Write-Centered "█████╗ ███████╗████████╗███████╗██╗  ██╗██╗███████╗" $colores.titulo
+    Write-Centered "██╔══██╗╚══███╔╝╚══██╔══╝██╔════╝██║ ██╔╝██║██╔════╝" $colores.titulo
+    Write-Centered "███████║  ███╔╝    ██║   █████╗  █████╔╝ ██║█████╗" $colores.titulo
+    Write-Centered "██╔══██║ ███╔╝     ██║   ██╔══╝  ██╔═██╗ ██║██╔══╝" $colores.titulo
+    Write-Centered "██║  ██║███████╗   ██║   ███████╗██║  ██╗██║███████╗" $colores.titulo
+    Write-Centered "╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚══════╝" $colores.titulo
+    Write-Separator
+    Write-Centered "🎮 GAMING OPTIMIZER + ULTIMATE UTILITIES 🛠️" $colores.opcion
+    Write-Centered "         by AZTEKILLERTECH" $colores.info
+    Write-Bottom
     Write-Host ""
 }
 
-# Función para preguntar Sí/No
+# ==============================================
+# FUNCIONES PRINCIPALES
+# ==============================================
 function Preguntar($mensaje) {
-    Write-Host $mensaje -ForegroundColor $colorPregunta
+    Write-Host "  ⚡ $mensaje" -ForegroundColor $colores.pregunta
     $resp = Read-Host "  ¿Aplicar? (S/N)"
     return ($resp -eq 'S' -or $resp -eq 's')
 }
 
-# Función para descargar e instalar un programa
 function Instalar-Programa {
     param(
         [string]$nombre,
         [string]$urlDescarga,
-        [string]$argumentosInstalacion = "/quiet /norestart",  # Parámetros silenciosos comunes
-        [bool]$necesitaAdmin = $true
+        [string]$argumentosInstalacion = "",
+        [string]$TipoInstalador = "exe",  # exe, msi, portable, web
+        [bool]$esWeb = $false
     )
     
-    Write-Host "`n📦 Preparando instalación de: $nombre" -ForegroundColor Yellow
+    Write-Host "`n  📦 Preparando instalación de: $nombre" -ForegroundColor $colores.info
     if (-not (Preguntar "  ¿Descargar e instalar $nombre?")) {
-        Write-Host "  ⏩ Instalación cancelada" -ForegroundColor $colorRechazado
+        Write-Host "  ⏩ Instalación cancelada" -ForegroundColor $colores.error
         return $false
     }
     
-    # Crear carpeta temporal
+    if ($esWeb) {
+        Write-Host "  🌐 Abriendo página web oficial para $nombre" -ForegroundColor $colores.advertencia
+        Start-Process $urlDescarga
+        return $true
+    }
+    
     $tempDir = "$env:TEMP\AztekillerInstaller"
     if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force | Out-Null }
-    $outputFile = Join-Path $tempDir "$($nombre -replace '[^a-zA-Z0-9]','')_installer.exe"
     
-    # Descargar
-    Write-Host "  ⬇️ Descargando desde $urlDescarga ..." -ForegroundColor Cyan
+    $extension = if ($urlDescarga -like "*.msi") { "msi" } elseif ($urlDescarga -like "*.exe") { "exe" } else { "installer" }
+    $outputFile = Join-Path $tempDir "$($nombre -replace '[^a-zA-Z0-9]','')_installer.$extension"
+    
+    Write-Host "  ⬇️ Descargando..." -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri $urlDescarga -OutFile $outputFile -UseBasicParsing -ErrorAction Stop
-        Write-Host "  ✅ Descarga completada" -ForegroundColor $colorAceptado
+        if ((Get-Item $outputFile).Length -eq 0) { throw "Archivo descargado vacío." }
+        Write-Host "  ✅ Descarga completada ($([math]::Round((Get-Item $outputFile).Length / 1MB, 2)) MB)" -ForegroundColor $colores.exito
     } catch {
-        Write-Host "  ❌ Error al descargar: $_" -ForegroundColor Red
+        Write-Host "  ❌ Error de descarga: $_" -ForegroundColor $colores.error
         return $false
     }
     
-    # Instalar
-    Write-Host "  🔧 Instalando... (puede tardar un momento)" -ForegroundColor Cyan
+    if ($TipoInstalador -eq "portable") {
+        $installPath = "${env:ProgramFiles}\$nombre"
+        if (-not (Test-Path $installPath)) { New-Item -ItemType Directory -Path $installPath -Force | Out-Null }
+        Copy-Item $outputFile -Destination "$installPath\$nombre.exe" -Force
+        Write-Host "  ✅ $nombre instalado como portable en $installPath" -ForegroundColor $colores.exito
+        return $true
+    }
+    
+    Write-Host "  🔧 Instalando..." -ForegroundColor Cyan
     try {
-        $process = Start-Process -FilePath $outputFile -ArgumentList $argumentosInstalacion -Wait -PassThru -NoNewWindow
-        if ($process.ExitCode -eq 0) {
-            Write-Host "  ✅ Instalación completada con éxito" -ForegroundColor $colorAceptado
+        if ($TipoInstalador -eq "msi") {
+            $proceso = Start-Process "msiexec.exe" -ArgumentList "/i `"$outputFile`" $argumentosInstalacion /quiet /norestart" -Wait -PassThru -NoNewWindow
         } else {
-            Write-Host "  ⚠️ El instalador terminó con código $($process.ExitCode). Puede requerir intervención manual." -ForegroundColor Yellow
+            $proceso = Start-Process -FilePath $outputFile -ArgumentList $argumentosInstalacion -Wait -PassThru -NoNewWindow
+        }
+        
+        if ($proceso.ExitCode -eq 0) {
+            Write-Host "  ✅ Instalación completada con éxito" -ForegroundColor $colores.exito
+        } else {
+            Write-Host "  ⚠️ Instalador terminó con código $($proceso.ExitCode). Revisa manualmente." -ForegroundColor $colores.advertencia
         }
     } catch {
-        Write-Host "  ❌ Error al ejecutar el instalador: $_" -ForegroundColor Red
+        Write-Host "  ❌ Error al ejecutar: $_" -ForegroundColor $colores.error
         return $false
     }
-    
-    # Limpiar (opcional, comentar si se quiere conservar el instalador)
-    Remove-Item $outputFile -Force -ErrorAction SilentlyContinue
     return $true
 }
 
-# ---- Menús de instalación por categorías ----
+# ==============================================
+# MENÚ DE INSTALACIÓN POR CATEGORÍAS
+# ==============================================
 
 function Instalar-Drivers {
     Mostrar-Banner
-    Write-Host "  🖥️  INSTALADOR DE DRIVERS" -ForegroundColor Yellow
-    Write-Host "  Selecciona qué driver quieres descargar e instalar:" -ForegroundColor White
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    🖥️  INSTALADOR DE DRIVERS  🖥️                     ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
     Write-Host ""
-    
-    # Detección de GPU real para sugerencia
-    $gpuReal = (Get-WmiObject Win32_VideoController | Where-Object {$_.Name -notlike "*Microsoft*" -and $_.Name -notlike "*Remote*" -and $_.Name -notlike "*AnyViewer*" -and $_.Name -notlike "*Virtual*"} | Select-Object -First 1).Name
-    if ($gpuReal) {
-        Write-Host "  🎯 GPU detectada: $gpuReal" -ForegroundColor Cyan
-        if ($gpuReal -like "*NVIDIA*") { Write-Host "  💡 Sugerencia: Elige la opción 1 (NVIDIA)" -ForegroundColor Green }
-        elseif ($gpuReal -like "*AMD*") { Write-Host "  💡 Sugerencia: Elige la opción 2 (AMD)" -ForegroundColor Green }
-        elseif ($gpuReal -like "*Intel*") { Write-Host "  💡 Sugerencia: Elige la opción 3 (Intel)" -ForegroundColor Green }
-    }
+    $gpuReal = (Get-WmiObject Win32_VideoController | Where-Object {$_.Name -notlike "*Microsoft*" -and $_.Name -notlike "*Remote*" -and $_.Name -notlike "*AnyViewer*"} | Select-Object -First 1).Name
+    if ($gpuReal) { Write-Host "  🎯 GPU detectada: $gpuReal" -ForegroundColor Cyan }
     Write-Host ""
-    
-    Write-Host "  1. Driver NVIDIA (GeForce Game Ready)" -ForegroundColor $colorPregunta
-    Write-Host "  2. Driver AMD (Adrenalin)" -ForegroundColor $colorPregunta
-    Write-Host "  3. Driver Intel (Graphics Driver)" -ForegroundColor $colorPregunta
-    Write-Host "  0. Volver al menú principal" -ForegroundColor Gray
-    Write-Host ""
-    
-    $opt = Read-Host "  Elige un número"
+    Write-Host "  1. NVIDIA Game Ready Driver" -ForegroundColor $colores.opcion
+    Write-Host "  2. AMD Adrenalin Edition" -ForegroundColor $colores.opcion
+    Write-Host "  3. Intel Driver & Support Assistant" -ForegroundColor $colores.opcion
+    Write-Host "  0. Volver" -ForegroundColor Gray
+    $opt = Read-Host "`n  Elige"
     switch ($opt) {
-        "1" {
-            # URL directa al detector automático de NVIDIA (redirige al exe adecuado)
-            Instalar-Programa -nombre "NVIDIA Driver" -urlDescarga "https://us.download.nvidia.com/Windows/572.83/572.83-desktop-win10-win11-64bit-international-dch-whql.exe" -argumentosInstalacion "/s"
-        }
-        "2" {
-            # AMD auto-detect tool (pequeño exe que luego descarga el driver correcto)
-            Instalar-Programa -nombre "AMD Adrenalin" -urlDescarga "https://drivers.amd.com/drivers/auto-detect-install.exe" -argumentosInstalacion ""
-        }
-        "3" {
-            # Intel Driver & Support Assistant (recomendado)
-            Instalar-Programa -nombre "Intel Driver Assistant" -urlDescarga "https://downloadmirror.intel.com/832159/Intel-Driver-Support-Assistant-Installer.exe" -argumentosInstalacion "/quiet"
-        }
+        "1" { Instalar-Programa -nombre "NVIDIA Driver" -urlDescarga "https://us.download.nvidia.com/Windows/572.83/572.83-desktop-win10-win11-64bit-international-dch-whql.exe" -argumentosInstalacion "/s" }
+        "2" { Instalar-Programa -nombre "AMD Auto-Detect" -urlDescarga "https://drivers.amd.com/drivers/auto-detect-install.exe" -argumentosInstalacion "" }
+        "3" { Instalar-Programa -nombre "Intel Driver Assistant" -urlDescarga "https://downloadmirror.intel.com/832159/Intel-Driver-Support-Assistant-Installer.exe" -argumentosInstalacion "/quiet" }
         "0" { return }
-        default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1; Instalar-Drivers }
     }
-    Read-Host "`nPresiona cualquier tecla para continuar"
+    Read-Host "`nPresiona cualquier tecla"
 }
 
 function Instalar-ProgramasGaming {
     Mostrar-Banner
-    Write-Host "  🎮 INSTALADOR DE PROGRAMAS GAMING" -ForegroundColor Yellow
-    Write-Host "  Selecciona qué programa instalar:" -ForegroundColor White
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    🎮 PROGRAMAS GAMING  🎮                          ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
     Write-Host ""
-    Write-Host "  1. MSI Afterburner (Overclock/Monitoreo)" -ForegroundColor $colorPregunta
-    Write-Host "  2. Discord" -ForegroundColor $colorPregunta
-    Write-Host "  3. Steam" -ForegroundColor $colorPregunta
-    Write-Host "  4. CPU-Z" -ForegroundColor $colorPregunta
-    Write-Host "  5. GPU-Z" -ForegroundColor $colorPregunta
-    Write-Host "  6. HWMonitor" -ForegroundColor $colorPregunta
-    Write-Host "  7. O&O ShutUp10 (Privacidad/Rendimiento)" -ForegroundColor $colorPregunta
-    Write-Host "  8. Visual C++ Redistributables (Todo en uno)" -ForegroundColor $colorPregunta
-    Write-Host "  0. Volver al menú principal" -ForegroundColor Gray
-    Write-Host ""
-    
-    $opt = Read-Host "  Elige un número"
-    switch ($opt) {
-        "1" { Instalar-Programa -nombre "MSI Afterburner" -urlDescarga "https://msi-afterburner.en.softonic.com/download?ex=MSI" -argumentosInstalacion "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" }
-        "2" { Instalar-Programa -nombre "Discord" -urlDescarga "https://discord.com/api/download?platform=win" -argumentosInstalacion "/S" }
-        "3" { Instalar-Programa -nombre "Steam" -urlDescarga "https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe" -argumentosInstalacion "/S" }
-        "4" { Instalar-Programa -nombre "CPU-Z" -urlDescarga "https://www.cpuid.com/downloads/cpu-z/cpu-z_2.12-en.exe" -argumentosInstalacion "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" }
-        "5" { Instalar-Programa -nombre "GPU-Z" -urlDescarga "https://www.techpowerup.com/download/techpowerup-gpu-z/" -argumentosInstalacion "" } # la página requiere interacción, mejor abrir navegador? por ahora manual
-        "6" { Instalar-Programa -nombre "HWMonitor" -urlDescarga "https://www.cpuid.com/downloads/hwmonitor/hwmonitor_1.55.exe" -argumentosInstalacion "/VERYSILENT" }
-        "7" { Instalar-Programa -nombre "O&O ShutUp10" -urlDescarga "https://dl.oo-software.com/OOSU10.exe" -argumentosInstalacion "/VERYSILENT" }
-        "8" { Instalar-Programa -nombre "VC++ Redistributables" -urlDescarga "https://github.com/abbodi1406/vcredist/releases/download/v0.86.0/VisualCppRedist_AIO_x86_x64.exe" -argumentosInstalacion "/quiet /norestart" }
-        "0" { return }
-        default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1; Instalar-ProgramasGaming }
+    $programas = @(
+        @{Num=1; Nombre="MSI Afterburner"; URL="https://msi-afterburner.en.softonic.com/download?ex=MSI"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; Tipo="exe"},
+        @{Num=2; Nombre="Discord"; URL="https://discord.com/api/download?platform=win"; Args="/S"; Tipo="exe"},
+        @{Num=3; Nombre="Steam"; URL="https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe"; Args="/S"; Tipo="exe"},
+        @{Num=4; Nombre="CPU-Z"; URL="https://www.cpuid.com/downloads/cpu-z/cpu-z_2.12-en.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; Tipo="exe"},
+        @{Num=5; Nombre="GPU-Z"; URL="https://www.techpowerup.com/download/techpowerup-gpu-z/"; Args=""; Tipo="web"},
+        @{Num=6; Nombre="HWMonitor"; URL="https://www.cpuid.com/downloads/hwmonitor/hwmonitor_1.55.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; Tipo="exe"},
+        @{Num=7; Nombre="O&O ShutUp10"; URL="https://dl.oo-software.com/OOSU10.exe"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=8; Nombre="Visual C++ AIO"; URL="https://github.com/abbodi1406/vcredist/releases/download/v0.86.0/VisualCppRedist_AIO_x86_x64.exe"; Args="/quiet /norestart"; Tipo="exe"}
+    )
+    foreach ($p in $programas) { Write-Host ("  {0}. {1}" -f $p.Num, $p.Nombre) -ForegroundColor $colores.opcion }
+    Write-Host "  0. Volver" -ForegroundColor Gray
+    $opt = Read-Host "`n  Elige"
+    if ($opt -eq "0") { return }
+    $sel = $programas | Where-Object { $_.Num -eq [int]$opt }
+    if ($sel) {
+        if ($sel.Tipo -eq "web") { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -esWeb $true }
+        else { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -argumentosInstalacion $sel.Args -TipoInstalador $sel.Tipo }
     }
-    Read-Host "`nPresiona cualquier tecla para continuar"
+    Read-Host "`nPresiona cualquier tecla"
 }
 
 function Instalar-Navegadores {
     Mostrar-Banner
-    Write-Host "  🌐 INSTALADOR DE NAVEGADORES" -ForegroundColor Yellow
-    Write-Host "  Selecciona qué navegador instalar:" -ForegroundColor White
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    🌐 NAVEGADORES  🌐                               ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
     Write-Host ""
-    Write-Host "  1. Firefox" -ForegroundColor $colorPregunta
-    Write-Host "  2. Opera GX (navegador gamer)" -ForegroundColor $colorPregunta
-    Write-Host "  3. Google Chrome" -ForegroundColor $colorPregunta
-    Write-Host "  4. Brave" -ForegroundColor $colorPregunta
-    Write-Host "  5. Mullvad Browser" -ForegroundColor $colorPregunta
-    Write-Host "  6. Tor Browser" -ForegroundColor $colorPregunta
-    Write-Host "  0. Volver al menú principal" -ForegroundColor Gray
-    Write-Host ""
-    
-    $opt = Read-Host "  Elige un número"
-    switch ($opt) {
-        "1" { Instalar-Programa -nombre "Firefox" -urlDescarga "https://download.mozilla.org/?product=firefox-latest&os=win64&lang=es-ES" -argumentosInstalacion "/S" }
-        "2" { Instalar-Programa -nombre "Opera GX" -urlDescarga "https://net.geo.opera.com/opera_gx?os=windows&channel=stable" -argumentosInstalacion "/silent" }
-        "3" { Instalar-Programa -nombre "Google Chrome" -urlDescarga "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -argumentosInstalacion "/silent /install" }
-        "4" { Instalar-Programa -nombre "Brave" -urlDescarga "https://github.com/brave/brave-browser/releases/download/v1.74.51/BraveBrowserStandaloneSilentSetup.exe" -argumentosInstalacion "/S" }
-        "5" { Instalar-Programa -nombre "Mullvad Browser" -urlDescarga "https://cdn.mullvad.net/browser/13.5.5/mullvad-browser-win64-13.5.5.exe" -argumentosInstalacion "/S" }
-        "6" { Instalar-Programa -nombre "Tor Browser" -urlDescarga "https://www.torproject.org/dist/torbrowser/13.5.6/torbrowser-install-win64-13.5.6_ALL.exe" -argumentosInstalacion "/S" }
-        "0" { return }
-        default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1; Instalar-Navegadores }
-    }
-    Read-Host "`nPresiona cualquier tecla para continuar"
+    $navegadores = @(
+        @{Num=1; Nombre="Firefox"; URL="https://download.mozilla.org/?product=firefox-latest&os=win64&lang=es-ES"; Args="/S"; Tipo="exe"},
+        @{Num=2; Nombre="Opera GX"; URL="https://net.geo.opera.com/opera_gx?os=windows&channel=stable"; Args="/silent"; Tipo="exe"},
+        @{Num=3; Nombre="Google Chrome"; URL="https://dl.google.com/chrome/install/latest/chrome_installer.exe"; Args="/silent /install"; Tipo="exe"},
+        @{Num=4; Nombre="Brave"; URL="https://github.com/brave/brave-browser/releases/download/v1.74.51/BraveBrowserStandaloneSilentSetup.exe"; Args="/S"; Tipo="exe"},
+        @{Num=5; Nombre="Mullvad Browser"; URL="https://cdn.mullvad.net/browser/13.5.5/mullvad-browser-win64-13.5.5.exe"; Args="/S"; Tipo="exe"},
+        @{Num=6; Nombre="Tor Browser"; URL="https://www.torproject.org/dist/torbrowser/13.5.6/torbrowser-install-win64-13.5.6_ALL.exe"; Args="/S"; Tipo="exe"}
+    )
+    foreach ($n in $navegadores) { Write-Host ("  {0}. {1}" -f $n.Num, $n.Nombre) -ForegroundColor $colores.opcion }
+    Write-Host "  0. Volver" -ForegroundColor Gray
+    $opt = Read-Host "`n  Elige"
+    if ($opt -eq "0") { return }
+    $sel = $navegadores | Where-Object { $_.Num -eq [int]$opt }
+    if ($sel) { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -argumentosInstalacion $sel.Args -TipoInstalador $sel.Tipo }
+    Read-Host "`nPresiona cualquier tecla"
 }
 
 function Instalar-Documentos {
     Mostrar-Banner
-    Write-Host "  📄 INSTALADOR DE HERRAMIENTAS PARA DOCUMENTOS" -ForegroundColor Yellow
-    Write-Host "  Selecciona qué herramienta instalar:" -ForegroundColor White
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    📄 HERRAMIENTAS PARA DOCUMENTOS  📄              ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
     Write-Host ""
-    Write-Host "  1. Adobe Acrobat Reader DC" -ForegroundColor $colorPregunta
-    Write-Host "  2. Calibre (gestor de libros)" -ForegroundColor $colorPregunta
-    Write-Host "  3. Joplin (notas FOSS)" -ForegroundColor $colorPregunta
-    Write-Host "  4. massCode (gestor de snippets)" -ForegroundColor $colorPregunta
-    Write-Host "  5. Obsidian (notas)" -ForegroundColor $colorPregunta
-    Write-Host "  6. PDF24 creator" -ForegroundColor $colorPregunta
-    Write-Host "  7. PDF-XChange Editor" -ForegroundColor $colorPregunta
-    Write-Host "  8. WinMerge (comparar archivos)" -ForegroundColor $colorPregunta
-    Write-Host "  9. Znote (notas ligeras)" -ForegroundColor $colorPregunta
-    Write-Host "  0. Volver al menú principal" -ForegroundColor Gray
-    Write-Host ""
-    
-    $opt = Read-Host "  Elige un número"
-    switch ($opt) {
-        "1" { Instalar-Programa -nombre "Adobe Acrobat Reader" -urlDescarga "https://get.adobe.com/reader/download/?installer=Reader_DC_2022.001.20169_ES_X9_64" -argumentosInstalacion "/sAll /rs" }
-        "2" { Instalar-Programa -nombre "Calibre" -urlDescarga "https://download.calibre-ebook.com/7.19.0/calibre-64bit-7.19.0.msi" -argumentosInstalacion "/quiet" }
-        "3" { Instalar-Programa -nombre "Joplin" -urlDescarga "https://github.com/laurent22/joplin/releases/download/v3.1.24/Joplin-Setup-3.1.24.exe" -argumentosInstalacion "/S" }
-        "4" { Instalar-Programa -nombre "massCode" -urlDescarga "https://github.com/massCodeIO/massCode/releases/download/v3.9.2/massCode-Setup-3.9.2.exe" -argumentosInstalacion "/S" }
-        "5" { Instalar-Programa -nombre "Obsidian" -urlDescarga "https://github.com/obsidianmd/obsidian-releases/releases/download/v1.7.7/Obsidian-1.7.7.exe" -argumentosInstalacion "/S" }
-        "6" { Instalar-Programa -nombre "PDF24 Creator" -urlDescarga "https://download.pdf24.org/pdf24-creator-11.24.0.msi" -argumentosInstalacion "/quiet" }
-        "7" { Instalar-Programa -nombre "PDF-XChange Editor" -urlDescarga "https://www.tracker-software.com/downloads/PDFXEdit_x64.msi" -argumentosInstalacion "/quiet" }
-        "8" { Instalar-Programa -nombre "WinMerge" -urlDescarga "https://github.com/winmerge/winmerge/releases/download/v2.16.42/WinMerge-2.16.42-x64-Setup.exe" -argumentosInstalacion "/S" }
-        "9" { Instalar-Programa -nombre "Znote" -urlDescarga "https://github.com/alainm23/znote/releases/download/v1.0.4/Znote-Setup-1.0.4.exe" -argumentosInstalacion "/S" }
-        "0" { return }
-        default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1; Instalar-Documentos }
-    }
-    Read-Host "`nPresiona cualquier tecla para continuar"
+    $docs = @(
+        @{Num=1; Nombre="Adobe Acrobat Reader DC"; URL="https://get.adobe.com/reader/download/?installer=Reader_DC_2022.001.20169_ES_X9_64"; Args="/sAll /rs"; Tipo="exe"},
+        @{Num=2; Nombre="Calibre"; URL="https://download.calibre-ebook.com/7.29.0/calibre-64bit-7.29.0.msi"; Args=""; Tipo="msi"},
+        @{Num=3; Nombre="Joplin"; URL="https://github.com/laurent22/joplin/releases/download/v3.1.24/Joplin-Setup-3.1.24.exe"; Args="/S"; Tipo="exe"},
+        @{Num=4; Nombre="Obsidian"; URL="https://github.com/obsidianmd/obsidian-releases/releases/download/v1.7.7/Obsidian-1.7.7.exe"; Args="/S"; Tipo="exe"},
+        @{Num=5; Nombre="PDF24 Creator"; URL="https://download.pdf24.org/pdf24-creator-11.24.0.msi"; Args=""; Tipo="msi"},
+        @{Num=6; Nombre="PDF-XChange Editor"; URL="https://www.tracker-software.com/downloads/PDFXEdit_x64.msi"; Args=""; Tipo="msi"},
+        @{Num=7; Nombre="WinMerge"; URL="https://github.com/winmerge/winmerge/releases/download/v2.16.42/WinMerge-2.16.42-x64-Setup.exe"; Args="/S"; Tipo="exe"},
+        @{Num=8; Nombre="WinRAR"; URL="https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-623.exe"; Args="/S"; Tipo="exe"}
+    )
+    foreach ($d in $docs) { Write-Host ("  {0}. {1}" -f $d.Num, $d.Nombre) -ForegroundColor $colores.opcion }
+    Write-Host "  0. Volver" -ForegroundColor Gray
+    $opt = Read-Host "`n  Elige"
+    if ($opt -eq "0") { return }
+    $sel = $docs | Where-Object { $_.Num -eq [int]$opt }
+    if ($sel) { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -argumentosInstalacion $sel.Args -TipoInstalador $sel.Tipo }
+    Read-Host "`nPresiona cualquier tecla"
 }
 
-# ---- Función de optimización (sin cambios importantes, solo colores) ----
+function Instalar-Utilidades {
+    Mostrar-Banner
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    🛠️  UTILIDADES AVANZADAS  🛠️                      ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
+    Write-Host ""
+    Write-Host "  Selecciona la utilidad a instalar (descarga automática):`n" -ForegroundColor Cyan
+    
+    $utilidades = @(
+        @{Num=1;  Nombre="Everything Search"; URL="https://www.voidtools.com/Everything-1.4.1.1026.x64.zip"; Args=""; Tipo="portable"},
+        @{Num=2;  Nombre="Rufus (USB Boot)"; URL="https://github.com/pbatard/rufus/releases/download/v4.6/rufus-4.6.exe"; Args=""; Tipo="portable"},
+        @{Num=3;  Nombre="Display Driver Uninstaller (DDU)"; URL="https://www.wagnardsoft.com/DDU/download"; Args=""; Tipo="web"},
+        @{Num=4;  Nombre="Bulk Crap Uninstaller"; URL="https://github.com/Klocman/Bulk-Crap-Uninstaller/releases/download/v5.8/BCUninstaller_5.8_portable.zip"; Args=""; Tipo="portable"},
+        @{Num=5;  Nombre="CrystalDiskInfo"; URL="https://sourceforge.net/projects/crystaldiskinfo/files/9.3.2/CrystalDiskInfo9_3_2.exe/download"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=6;  Nombre="HWInfo"; URL="https://www.hwinfo.com/files/hwinfo640_install.exe"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=7;  Nombre="FanControl"; URL="https://github.com/Rem0o/FanControl.Releases/releases/download/V210/FanControl.zip"; Args=""; Tipo="portable"},
+        @{Num=8;  Nombre="OpenRGB"; URL="https://openrgb.org/releases/OpenRGB_0.9_Windows_64_b5f46e3.zip"; Args=""; Tipo="portable"},
+        @{Num=9;  Nombre="WizTree (espacio en disco)"; URL="https://diskanalyzer.com/files/wiztree_4_21_portable.zip"; Args=""; Tipo="portable"},
+        @{Num=10; Nombre="SpaceSniffer"; URL="http://www.uderzo.it/downloads/SpaceSniffer_1.3.0.2_portable.zip"; Args=""; Tipo="portable"},
+        @{Num=11; Nombre="LockHunter"; URL="https://lockhunter.com/downloads/LockHunter%20x64%20Setup.exe"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=12; Nombre="Malwarebytes Free"; URL="https://data-cdn.mbamupdates.com/v1/mbam-setup-consumer/MBSetup.exe"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=13; Nombre="KeePassXC"; URL="https://github.com/keepassxreboot/keepassxc/releases/download/2.7.9/KeePassXC-2.7.9-Win64.msi"; Args=""; Tipo="msi"},
+        @{Num=14; Nombre="AutoHotkey"; URL="https://www.autohotkey.com/download/ahk-v2.exe"; Args="/S"; Tipo="exe"},
+        @{Num=15; Nombre="qBittorrent"; URL="https://sourceforge.net/projects/qbittorrent/files/qbittorrent-win64/qbittorrent-4.6.7/qbittorrent_4.6.7_x64_setup.exe/download"; Args="/S"; Tipo="exe"},
+        @{Num=16; Nombre="Syncthing (sincronización)"; URL="https://github.com/syncthing/syncthing/releases/download/v1.27.12/syncthing-windows-amd64-v1.27.12.zip"; Args=""; Tipo="portable"},
+        @{Num=17; Nombre="Parsec (streaming gaming)"; URL="https://builds.parsecgaming.com/package/parsec-windows.exe"; Args="/S"; Tipo="exe"},
+        @{Num=18; Nombre="Process Lasso"; URL="https://bitsum.com/files/processlassosetup64.exe"; Args="/VERYSILENT"; Tipo="exe"},
+        @{Num=19; Nombre="TranslucentTB"; URL="https://github.com/TranslucentTB/TranslucentTB/releases/download/2024.1/TranslucentTB.x64.zip"; Args=""; Tipo="portable"},
+        @{Num=20; Nombre="Windhawk (mods Windows)"; URL="https://github.com/ramensoftware/windhawk/releases/download/v2.3.1/windhawk_setup.exe"; Args="/S"; Tipo="exe"}
+    )
+    
+    foreach ($u in $utilidades) { Write-Host ("  {0,2}. {1}" -f $u.Num, $u.Nombre) -ForegroundColor $colores.opcion }
+    Write-Host "  0. Volver" -ForegroundColor Gray
+    $opt = Read-Host "`n  Elige"
+    if ($opt -eq "0") { return }
+    $sel = $utilidades | Where-Object { $_.Num -eq [int]$opt }
+    if ($sel) {
+        if ($sel.Tipo -eq "web") { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -esWeb $true }
+        else { Instalar-Programa -nombre $sel.Nombre -urlDescarga $sel.URL -argumentosInstalacion $sel.Args -TipoInstalador $sel.Tipo }
+    }
+    Read-Host "`nPresiona cualquier tecla"
+}
+
 function Optimizar-Sistema {
     Mostrar-Banner
-    Write-Host "  🚀 INICIANDO OPTIMIZACIÓN DE FPS" -ForegroundColor Yellow
-    Write-Host "  Responde S (Sí) o N (No) a cada ajuste`n" -ForegroundColor White
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                    🚀 OPTIMIZACIÓN DE RENDIMIENTO 🚀                 ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
+    Write-Host ""
+    Write-Host "  Responde S (Sí) o N (No) a cada ajuste:`n" -ForegroundColor Cyan
     
-    if (Preguntar "⚡ ¿Cambiar plan de energía a ALTO RENDIMIENTO?") {
-        powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
-        Write-Host "  ✅ Plan Alto Rendimiento activado" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🧠 ¿Desactivar Core Parking? (usa todos los núcleos)") {
-        powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 0
-        powercfg -setactive scheme_current
-        Write-Host "  ✅ Core Parking desactivado" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🛑 ¿Desactivar servicios en segundo plano (telemetría, indexador)?") {
-        $servicios = @("DiagTrack","WSearch","SysMain","dmwappushservice","MapsBroker","XblAuthManager")
-        foreach ($svc in $servicios) {
-            Stop-Service $svc -Force -ErrorAction SilentlyContinue
-            Set-Service $svc -StartupType Disabled -ErrorAction SilentlyContinue
-            Write-Host "  ✅ Desactivado: $svc" -ForegroundColor $colorAceptado
-        }
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🎨 ¿Desactivar efectos visuales? (más FPS)") {
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -ErrorAction SilentlyContinue
-        Write-Host "  ✅ Efectos desactivados" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🎯 ¿Dar prioridad máxima a juegos?") {
-        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -ErrorAction SilentlyContinue
-        Write-Host "  ✅ Prioridad a juegos aplicada" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🖥️ ¿Desactivar MPO? (soluciona tirones)") {
-        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Dwm" -Name "OverlayTestMode" -Value 5 -Type DWord -Force -ErrorAction SilentlyContinue
-        Write-Host "  ✅ MPO desactivado" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🔕 ¿Desactivar notificaciones y sugerencias?") {
-        New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Force | Out-Null
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338387Enabled" -Value 0 -Type DWord
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SilentInstalledAppsEnabled" -Value 0 -Type DWord
-        Write-Host "  ✅ Notificaciones desactivadas" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "📅 ¿Desactivar tareas de telemetría?") {
-        $tareas = @("\Microsoft\Windows\Application Experience\*","\Microsoft\Windows\Customer Experience Improvement Program\*","\Microsoft\Windows\DiskDiagnostic\*")
-        foreach ($tarea in $tareas) {
-            Get-ScheduledTask -TaskPath $tarea -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue
-            Write-Host "  ✅ Tareas desactivadas: $tarea" -ForegroundColor $colorAceptado
-        }
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    
-    if (Preguntar "🗑️ ¿Ejecutar limpieza de archivos temporales?") {
-        CleanMgr /sagerun:1 -ErrorAction SilentlyContinue
-        Write-Host "  ✅ Limpieza ejecutada" -ForegroundColor $colorAceptado
-    } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
+    if (Preguntar "⚡ ¿Plan de energía ALTO RENDIMIENTO?") { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null; Write-Host "  ✅ Aplicado" -ForegroundColor Green } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar "🧠 ¿Desactivar Core Parking?") { powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 0; powercfg -setactive scheme_current; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar "🛑 ¿Desactivar servicios molestos?") { @("DiagTrack","WSearch","SysMain","dmwappushservice","MapsBroker","XblAuthManager") | ForEach-Object { Stop-Service $_ -Force -EA 0; Set-Service $_ -StartupType Disabled -EA 0; Write-Host "  ✅ $_" -ForegroundColor Green } } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar "🎨 ¿Desactivar efectos visuales?") { Set-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -EA 0; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar "🎯 ¿Prioridad máxima a juegos?") { Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -Value 0 -EA 0; Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 0xffffffff -EA 0; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar("🖥️ ¿Desactivar MPO (tirones GPU)?")) { New-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\Dwm" -Name "OverlayTestMode" -Value 5 -Type DWord -Force -EA 0; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar("🔕 ¿Desactivar notificaciones?")) { New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Force | Out-Null; @("SubscribedContent-338387Enabled","SilentInstalledAppsEnabled") | ForEach-Object { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name $_ -Value 0 -EA 0 }; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar("📅 ¿Desactivar telemetría programada?")) { @("\Microsoft\Windows\Application Experience\*","\Microsoft\Windows\Customer Experience Improvement Program\*","\Microsoft\Windows\DiskDiagnostic\*") | ForEach-Object { Get-ScheduledTask -TaskPath $_ -EA 0 | Disable-ScheduledTask -EA 0 }; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" }
+    if (Preguntar("🗑️ ¿Limpiar temporales?")) { CleanMgr /sagerun:1 -EA 0; Write-Host "  ✅ Ejecutado" } else { Write-Host "  ⏩ Omitido" }
     
     $ramGB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 2)
-    if ($ramGB -ge 16) {
-        if (Preguntar "💾 Tienes $ramGB GB RAM. ¿Desactivar Pagefile? (solo 32GB+)") {
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "PagingFiles" -Value "" -Type MultiString
-            Write-Host "  ✅ Pagefile desactivado" -ForegroundColor $colorAceptado
-        } else { Write-Host "  ⏩ Omitido" -ForegroundColor $colorRechazado }
-    } else {
-        Write-Host "  ⏩ Pagefile: tienes $ramGB GB, no recomendado" -ForegroundColor Gray
-    }
+    if ($ramGB -ge 16) { if (Preguntar("💾 ¿Desactivar Pagefile? (solo 32GB+ RAM)")) { Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "PagingFiles" -Value "" -EA 0; Write-Host "  ✅ Aplicado" } else { Write-Host "  ⏩ Omitido" } }
     
     Write-Host "`n  ✅ Optimización completada. REINICIA para aplicar cambios." -ForegroundColor Green
     pause
 }
 
-# ---- MENÚ PRINCIPAL ----
+# ==============================================
+# MENÚ PRINCIPAL
+# ==============================================
 do {
     Mostrar-Banner
-    Write-Host "  🎯 SELECCIONA UNA OPCIÓN:" -ForegroundColor Yellow
-    Write-Host "  1. 🚀 Optimizar FPS (recomendado para juegos)" -ForegroundColor Cyan
-    Write-Host "  2. 🖥️  Instalar drivers (NVIDIA, AMD, Intel)" -ForegroundColor Cyan
-    Write-Host "  3. 🎮 Instalar programas gaming" -ForegroundColor Cyan
-    Write-Host "  4. 🌐 Instalar navegadores" -ForegroundColor Cyan
-    Write-Host "  5. 📄 Instalar herramientas para documentos" -ForegroundColor Cyan
-    Write-Host "  0. ❌ Salir" -ForegroundColor Gray
+    Write-Host "  ╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor $colores.borde
+    Write-Host "  ║                          🎯 MENÚ PRINCIPAL 🎯                       ║" -ForegroundColor $colores.titulo
+    Write-Host "  ╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor $colores.borde
     Write-Host ""
-    $menu = Read-Host "  Elige [1,2,3,4,5,0]"
+    Write-Host "  ║  1. 🚀 Optimizar FPS (recomendado)" -ForegroundColor $colores.opcion
+    Write-Host "  ║  2. 🖥️  Instalar Drivers (GPU/CPU)" -ForegroundColor $colores.opcion
+    Write-Host "  ║  3. 🎮 Instalar Programas Gaming" -ForegroundColor $colores.opcion
+    Write-Host "  ║  4. 🌐 Instalar Navegadores" -ForegroundColor $colores.opcion
+    Write-Host "  ║  5. 📄 Instalar Herramientas Documentos" -ForegroundColor $colores.opcion
+    Write-Host "  ║  6. 🛠️  Instalar Utilidades Avanzadas" -ForegroundColor $colores.opcion
+    Write-Host "  ║  0. ❌ Salir" -ForegroundColor Gray
+    Write-Host ""
+    $menu = Read-Host "  Elige [1-6,0]"
     
     switch ($menu) {
         "1" { Optimizar-Sistema }
@@ -321,6 +332,7 @@ do {
         "3" { Instalar-ProgramasGaming }
         "4" { Instalar-Navegadores }
         "5" { Instalar-Documentos }
+        "6" { Instalar-Utilidades }
         "0" { Write-Host "  Hasta luego, visita aztekillertech.net" -ForegroundColor Magenta; break }
         default { Write-Host "  Opción inválida" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
